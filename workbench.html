@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>日常与 AI Agent 协同工作台 (账号云同步版)</title>
-  <link rel="stylesheet" href="./workbench.css?v=dd2e54e0e52b">
+  <link rel="stylesheet" href="./workbench.css?v=21c1dd39de6e">
   <style>
     body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
   </style>
@@ -1003,7 +1003,7 @@ function updatePresenceDots(){
   const labels={working:'工作中',waiting:'等待授权',idle:'空闲',offline:'已断开',unknown:'未连接或状态待确认'};
   const last=sessions.length?Math.max(...sessions.map(s=>Date.parse(s.updated_at))):null;
   const devices=connections.filter(c=>fresh.some(s=>s.connection_id===c.id&&s.status==='working')).map(c=>c.device_name).filter(Boolean);
-  const description=(connection.provider==='workbuddy'?'WorkBuddy':connection.provider==='gemini-browser'?'Gemini 网页':connection.provider==='chatgpt-browser'?'ChatGPT 网页':'Codex')+'状态：'+labels[status]+(devices.length?'；工作设备：'+devices.join('、'):'')+(last?'；最后更新 '+new Date(last).toLocaleString():'；等待首次连接');
+  const description=(connection.provider==='kimi-work'?'Kimi Work（仅 Work，Chat 未接入）':connection.provider==='workbuddy'?'WorkBuddy':connection.provider==='gemini-browser'?'Gemini 网页':connection.provider==='chatgpt-browser'?'ChatGPT 网页':'Codex')+'状态：'+labels[status]+(devices.length?'；工作设备：'+devices.join('、'):'')+(last?'；最后更新 '+new Date(last).toLocaleString():'；等待首次连接');
   const dot=button.querySelector('.agent-status-dot');dot.className='agent-status-dot live-'+status;
   dot.onclick=event=>{event.stopPropagation();showToast(description);};
   button.title=description;button.setAttribute('aria-label',button.textContent+'：'+description);
