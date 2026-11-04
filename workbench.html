@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>日常与 AI Agent 协同工作台 (账号云同步版)</title>
-  <link rel="stylesheet" href="./workbench.css">
+  <link rel="stylesheet" href="./workbench.css?v=50cae42fba24">
   <style>
     body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
   </style>
@@ -683,7 +683,7 @@
             </section>
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
               ${ui.showLeftSidebar ? `
-                <div class="lg:col-span-4 space-y-5">
+                <div id="agent-project-management" class="lg:col-span-4 space-y-5">
                   <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
                     <h2 class="font-semibold text-sm text-slate-900">AI Agent 管理</h2>
                     <div class="space-y-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
@@ -990,8 +990,45 @@ const updateHeaderHeight = () => {
 const headerObserver = new ResizeObserver(updateHeaderHeight);
 const mobileTaskLayout = matchMedia('(max-width: 640px)');
 let taskDialogOpen = false;
+let managementDialogOpen = false;
+let managementFeedback = '';
 const taskFieldIds = ['task-title', 'task-note', 'task-agent', 'task-proj'];
 let clearTaskDraft = false;
+function installManagementDialog() {
+  if (!mobileTaskLayout.matches) return;
+  const panel = document.getElementById('agent-project-management');
+  const launch = document.querySelector('button[onclick="toggleSidebar()"]');
+  if (!panel || !launch) return;
+  launch.textContent = '管理';
+  launch.setAttribute('aria-haspopup', 'dialog');
+  launch.setAttribute('aria-expanded', String(managementDialogOpen));
+  const dialog = document.createElement('dialog');
+  dialog.id = 'mobile-management-dialog';
+  dialog.setAttribute('aria-labelledby', 'mobile-management-heading');
+  dialog.innerHTML = '<div class="mobile-management-header"><h2 id="mobile-management-heading">Agent / 项目管理</h2><button type="button" aria-label="关闭管理">关闭 ×</button></div><p class="mobile-management-feedback" role="status"></p>';
+  dialog.querySelector('.mobile-management-feedback').textContent = managementFeedback;
+  dialog.append(panel);document.body.append(dialog);
+  const close = () => {managementDialogOpen=false;managementFeedback='';dialog.close();launch.setAttribute('aria-expanded','false');post('editing',{active:taskDialogOpen});launch.focus();};
+  dialog.querySelector('button').onclick=close;
+  dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
+  if(managementDialogOpen){dialog.showModal();post('editing',{active:true});}
+}
+const originalToggleSidebar=window.toggleSidebar;
+window.toggleSidebar=()=>{
+  if(!mobileTaskLayout.matches){originalToggleSidebar();return;}
+  const dialog=document.getElementById('mobile-management-dialog');
+  if(!dialog)return;
+  managementDialogOpen=true;dialog.querySelector('.mobile-management-feedback').textContent='';dialog.showModal();
+  document.querySelector('button[onclick="toggleSidebar()"]').setAttribute('aria-expanded','true');
+  post('editing',{active:true});
+};
+const originalShowToast=showToast;
+showToast=function(message){
+  if(managementDialogOpen&&mobileTaskLayout.matches){
+    managementFeedback=message;
+    const feedback=document.querySelector('.mobile-management-feedback');if(feedback)feedback.textContent=message;
+  }else originalShowToast(message);
+};
 function installTaskDialog() {
   if (!mobileTaskLayout.matches) return;
   const input = document.getElementById('task-title');
@@ -1014,10 +1051,18 @@ function installTaskDialog() {
 render = function() {
   const filterScroll = mobileTaskLayout.matches ? [...document.querySelectorAll('.filter-options')].map(el => el.scrollLeft) : [];
   const oldDialog = document.getElementById('mobile-task-dialog');
+  const oldManagementDialog = document.getElementById('mobile-management-dialog');
+  const managementScroll = oldManagementDialog?.scrollTop || 0;
   const draft = !clearTaskDraft && (mobileTaskLayout.matches || oldDialog) ? Object.fromEntries(taskFieldIds.map(id => [id,document.getElementById(id)?.value])) : null;
   oldDialog?.remove();
-  originalRender();
+  oldManagementDialog?.remove();
+  const sidebarVisible=ui.showLeftSidebar;
+  if(mobileTaskLayout.matches)ui.showLeftSidebar=true;
+  try{originalRender();}finally{ui.showLeftSidebar=sidebarVisible;}
   installTaskDialog();
+  installManagementDialog();
+  const newManagementDialog=document.getElementById('mobile-management-dialog');
+  if(newManagementDialog)newManagementDialog.scrollTop=managementScroll;
   document.querySelectorAll('.filter-options').forEach((el,index) => {if(filterScroll[index] !== undefined)el.scrollLeft=filterScroll[index];});
   if (draft) for (const [id,value] of Object.entries(draft)) {const el=document.getElementById(id);if(el && value!==undefined)el.value=value;}
   headerObserver.disconnect();
@@ -1072,7 +1117,7 @@ save = function(message) {
 window.toggleCloudModal = () => post('sync');
 window.clearDemoData = () => showToast('请通过任务、记录和垃圾桶管理你的数据');
 window.addEventListener('focusin', event => { if (event.target.matches('input,textarea,select')) post('editing', {active: true}); });
-window.addEventListener('focusout', () => post('editing', {active: taskDialogOpen}));
+window.addEventListener('focusout', () => post('editing', {active: mobileTaskLayout.matches && (taskDialogOpen || managementDialogOpen)}));
 post('ready');
 
   </script>
