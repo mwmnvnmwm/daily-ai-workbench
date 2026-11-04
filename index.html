@@ -9,7 +9,7 @@
  <p id="auth-message" role="status" aria-live="polite"></p><p class="footnote">首次使用？登录后可导入旧工作台的 JSON 备份。</p></section>
 </main>
 <section id="workspace" hidden>
- <div class="account-bar"><div><strong>◈ 我的工作台</strong><span id="account-email"></span></div><div class="bar-actions"><span id="sync-status" role="status" aria-live="polite">正在连接…</span><button id="refresh">同步</button><button id="import">导入旧数据</button><button id="backup">备份</button><button id="password-change">修改密码</button><button id="logout">退出</button></div></div>
+ <details id="account-panel" open><summary>账号与同步 <span>展开 / 收起</span></summary><div class="account-bar"><div><strong>◈ 我的工作台</strong><span id="account-email"></span></div><div class="bar-actions"><span id="sync-status" role="status" aria-live="polite">正在连接…</span><button id="refresh">同步</button><button id="import">导入旧数据</button><button id="backup">备份</button><button id="password-change">修改密码</button><button id="logout">退出</button></div></div></details>
  <div id="notice" hidden><span id="notice-text"></span><button id="resolve" hidden>处理冲突</button></div>
  <div id="loading">正在读取你的云端记录…</div><iframe id="workbench" title="日常与 AI Agent 工作台" hidden></iframe>
 </section>
