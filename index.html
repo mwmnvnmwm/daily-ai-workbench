@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>日常与 AI Agent 协同工作台</title><link rel="stylesheet" href="./shell.css"></head>
+<body>
+<main id="auth-view" class="auth-layout">
+ <section class="intro"><span class="eyebrow">DAILY WORKBENCH</span><h1>让日常记录，<br>在每个设备接续。</h1><p>任务、灵感与 AI Agent 协作记录，<br>登录同一账号，继续上次的工作。</p><div class="features"><span>账号私有空间</span><span>自动云同步</span><span>保留原有导出</span></div></section>
+ <section class="card"><div class="mark">◈</div><h2 id="auth-title">登录你的工作台</h2><p class="muted">使用邮箱和密码访问你的记录</p>
+ <form id="auth-form"><label>邮箱<input id="email" type="email" autocomplete="username" required placeholder="you@example.com"></label><label>密码<input id="password" type="password" autocomplete="current-password" minlength="10" required placeholder="至少 10 位"></label><button id="login" type="submit" class="primary">登录并同步</button></form>
+ <div class="auth-actions"><button id="signup" type="button">注册新账号</button><button id="forgot" type="button">忘记密码</button></div>
+ <p id="auth-message" role="status" aria-live="polite"></p><p class="footnote">首次使用？登录后可导入旧工作台的 JSON 备份。</p></section>
+</main>
+<section id="workspace" hidden>
+ <div class="account-bar"><div><strong>◈ 我的工作台</strong><span id="account-email"></span></div><div class="bar-actions"><span id="sync-status" role="status" aria-live="polite">正在连接…</span><button id="refresh">同步</button><button id="import">导入旧数据</button><button id="backup">备份</button><button id="password-change">修改密码</button><button id="logout">退出</button></div></div>
+ <div id="notice" hidden><span id="notice-text"></span><button id="resolve" hidden>处理冲突</button></div>
+ <div id="loading">正在读取你的云端记录…</div><iframe id="workbench" title="日常与 AI Agent 工作台" hidden></iframe>
+</section>
+<input id="import-file" type="file" accept=".json,application/json" hidden>
+<dialog id="dialog"><h2 id="dialog-title"></h2><p id="dialog-description"></p><input id="new-password" type="password" autocomplete="new-password" minlength="10" hidden><div class="dialog-actions"><button id="dialog-cancel">取消</button><button id="dialog-confirm" class="primary">确认</button></div></dialog>
+<script type="module" src="./app.js"></script></body></html>
