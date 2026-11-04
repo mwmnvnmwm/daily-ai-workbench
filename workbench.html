@@ -52,7 +52,7 @@
 
     let ui = {
       activeTab: "agent_workspace",
-      showLeftSidebar: true,
+      showLeftSidebar: false,
       taskViewMode: "list",
       selectedAgentFilter: "all",
       selectedProjectFilter: "all",
@@ -639,7 +639,7 @@
       const expData = getExportData();
 
       document.getElementById("app").innerHTML = `
-        <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 shadow-2xs">
+        <header class="workbench-header sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 shadow-2xs">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <div class="flex items-center gap-2">
@@ -663,26 +663,28 @@
         </header>
         <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 space-y-5">
           ${ui.activeTab === "agent_workspace" ? `
-            <div class="bg-white rounded-2xl border border-slate-200 p-3.5 flex flex-wrap items-center justify-between gap-3">
-              <div class="flex flex-wrap items-center gap-2">
-                <button onclick="toggleSidebar()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-700">${ui.showLeftSidebar ? "收起管理栏" : "展开 Agent/项目管理"}</button>
-                <span class="text-xs text-slate-400 ml-1">Agent:</span>
+            <section id="workspace-filters" aria-label="任务筛选导航">
+              <div class="filter-toolbar">
+                <button onclick="toggleSidebar()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-700" aria-expanded="${ui.showLeftSidebar}">${ui.showLeftSidebar ? "收起 Agent/项目管理" : "展开 Agent/项目管理"}</button>
+                <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button onclick="setTaskView('list')" class="px-2.5 py-1 rounded-lg text-xs font-medium ${ui.taskViewMode==='list'?'bg-white text-indigo-700 shadow-2xs':'text-slate-600'}">清爽列表</button>
+                  <button onclick="setTaskView('kanban')" class="px-2.5 py-1 rounded-lg text-xs font-medium ${ui.taskViewMode==='kanban'?'bg-white text-indigo-700 shadow-2xs':'text-slate-600'}">状态看板</button>
+                </div>
+              </div>
+              <div class="filter-row" data-filter="agents"><span class="filter-label">Agent</span><div class="filter-options">
                 <button onclick="setAgentFilter('all')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedAgentFilter==='all'?'bg-indigo-600 text-white':'bg-slate-100 text-slate-600'}">全部 (${state.tasks.length})</button>
                 ${state.agents.map(a => `<button onclick="setAgentFilter('${a.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedAgentFilter===a.id?'bg-indigo-600 text-white':'bg-slate-100 text-slate-700'}">${esc(a.name)}</button>`).join("")}
-                <span class="text-xs text-slate-400 ml-1">项目:</span>
+              </div></div>
+              <div class="filter-row" data-filter="projects"><span class="filter-label">项目</span><div class="filter-options">
                 <button onclick="setProjFilter('all')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedProjectFilter==='all'?'bg-purple-600 text-white':'bg-slate-100 text-slate-600'}">全部</button>
                 ${state.projects.map(p => `<button onclick="setProjFilter('${p.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedProjectFilter===p.id?'bg-purple-600 text-white':'bg-purple-50 text-purple-700'}">${esc(p.name)}</button>`).join("")}
-              </div>
-              <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <button onclick="setTaskView('list')" class="px-2.5 py-1 rounded-lg text-xs font-medium ${ui.taskViewMode==='list'?'bg-white text-indigo-700 shadow-2xs':'text-slate-600'}">清爽列表</button>
-                <button onclick="setTaskView('kanban')" class="px-2.5 py-1 rounded-lg text-xs font-medium ${ui.taskViewMode==='kanban'?'bg-white text-indigo-700 shadow-2xs':'text-slate-600'}">状态看板</button>
-              </div>
-            </div>
+              </div></div>
+            </section>
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
               ${ui.showLeftSidebar ? `
                 <div class="lg:col-span-4 space-y-5">
                   <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-                    <h2 class="font-semibold text-sm text-slate-900">AI Agent 管理（自由增删与改名）</h2>
+                    <h2 class="font-semibold text-sm text-slate-900">AI Agent 管理</h2>
                     <div class="space-y-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                       <input id="new-agent-input" placeholder="输入新 Agent 名称" class="w-full px-3 py-1.5 text-xs bg-white border rounded-lg" />
                       <div class="flex gap-2">
@@ -715,7 +717,7 @@
                     </div>
                   </div>
                   <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-                    <h2 class="font-semibold text-sm text-slate-900">项目管理（自由增删与改名）</h2>
+                    <h2 class="font-semibold text-sm text-slate-900">项目管理</h2>
                     <div class="flex gap-2">
                       <input id="new-proj-input" placeholder="输入新项目名称..." class="flex-1 px-3 py-1.5 text-xs bg-slate-50 border rounded-lg" />
                       <button onclick="addProject()" class="px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg">新增项目</button>
@@ -759,7 +761,7 @@
                 </div>
                 <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                   <div class="px-4 py-3 border-b bg-slate-50/60 flex flex-wrap items-center justify-between gap-2">
-                    <h3 class="font-semibold text-sm">Agent 任务台（点击状态按钮自动生成新任务条目并记录时间）</h3>
+                    <h3 class="font-semibold text-sm">Agent 任务台</h3>
                     <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border">
                       ${[{k:"all",l:"全部"},{k:"active",l:"开启"},{k:"paused",l:"暂停"},{k:"completed",l:"完成"}].map(it => `<button onclick="setStatusFilter('${it.k}')" class="px-2 py-0.5 rounded text-xs font-medium ${ui.statusFilter===it.k?'bg-white text-indigo-700 shadow-2xs':'text-slate-600'}">${it.l}</button>`).join("")}
                     </div>
@@ -979,6 +981,29 @@
 const HOST_ORIGIN = location.origin;
 let accountReady = false;
 const post = (type, extra = {}) => parent.postMessage({channel: 'daily-account-v1', type, ...extra}, HOST_ORIGIN);
+const originalRender = render;
+const updateHeaderHeight = () => {
+  const header = document.querySelector('.workbench-header');
+  if (header) document.documentElement.style.setProperty('--workbench-header-height', header.getBoundingClientRect().height + 'px');
+};
+const headerObserver = new ResizeObserver(updateHeaderHeight);
+render = function() {
+  originalRender();
+  headerObserver.disconnect();
+  const header = document.querySelector('.workbench-header');
+  if (header) headerObserver.observe(header);
+  updateHeaderHeight();
+};
+window.setInitialStatus = status => {
+  const fields = ['task-title', 'task-note', 'task-agent', 'task-proj'];
+  const draft = Object.fromEntries(fields.map(id => [id, document.getElementById(id)?.value]));
+  ui.taskInitialStatus = status;
+  render();
+  for (const [id, value] of Object.entries(draft)) {
+    const input = document.getElementById(id);
+    if (input && value !== undefined) input.value = value;
+  }
+};
 window.addEventListener('message', event => {
   if (event.origin !== HOST_ORIGIN || event.source !== parent || event.data?.channel !== 'daily-account-v1') return;
   if (event.data.type === 'load') {
