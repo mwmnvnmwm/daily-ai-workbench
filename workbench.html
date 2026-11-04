@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>日常与 AI Agent 协同工作台 (账号云同步版)</title>
-  <link rel="stylesheet" href="./workbench.css?v=24f3cf673d6c">
+  <link rel="stylesheet" href="./workbench.css?v=0009034a67c8">
   <style>
     body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
   </style>
@@ -984,18 +984,26 @@ const HOST_ORIGIN = location.origin;
 let accountReady = false;
 let liveConnections=[],liveSessions=[],presenceFailed=false;
 function updatePresenceDots(){
- for(const connection of liveConnections){
+ for(const b of document.querySelectorAll('.agent-filter-chip')){
+  const active=state.tasks.some(t=>t.agentId===b.dataset.agentId&&t.status==='active');
+  const dot=b.querySelector('.agent-status-dot');dot.className='agent-status-dot '+(active?'is-active':'is-idle');dot.onclick=null;
+  b.title=active?'有进行中的任务':'暂无进行中的任务';b.setAttribute('aria-label',b.textContent+'：'+b.title);
+ }
+ for(const agentId of new Set(liveConnections.map(c=>c.agent_id))){
+  const connections=liveConnections.filter(c=>c.agent_id===agentId);
+  const connection=connections[0];
   const button=[...document.querySelectorAll('.agent-filter-chip')].find(e=>e.dataset.agentId===connection.agent_id);
   if(!button)continue;
-  const sessions=liveSessions.filter(s=>s.connection_id===connection.id);
+  const sessions=liveSessions.filter(s=>connections.some(c=>c.id===s.connection_id));
   const fresh=sessions.filter(s=>Date.now()-Date.parse(s.updated_at)<300000);
   let status='unknown';
   if(!presenceFailed&&fresh.length){
-   status=fresh.some(s=>s.status==='working')?'working':fresh.some(s=>s.status==='waiting')?'waiting':sessions.some(s=>s.status!=='offline'&&!fresh.includes(s))?'unknown':fresh.some(s=>s.status==='idle')?'idle':'offline';
+   status=fresh.some(s=>s.status==='working')?'working':fresh.some(s=>s.status==='waiting')?'waiting':fresh.some(s=>s.status==='unknown')||sessions.some(s=>s.status!=='offline'&&!fresh.includes(s))||connections.some(c=>!sessions.some(s=>s.connection_id===c.id))?'unknown':fresh.some(s=>s.status==='idle')?'idle':'offline';
   }
   const labels={working:'工作中',waiting:'等待授权',idle:'空闲',offline:'已断开',unknown:'未连接或状态待确认'};
   const last=sessions.length?Math.max(...sessions.map(s=>Date.parse(s.updated_at))):null;
-  const description='Codex 实时状态：'+labels[status]+(last?'；最后事件 '+new Date(last).toLocaleString():'；等待首次连接');
+  const devices=connections.filter(c=>fresh.some(s=>s.connection_id===c.id&&s.status==='working')).map(c=>c.device_name).filter(Boolean);
+  const description=(connection.provider==='chatgpt-browser'?'ChatGPT 网页':'Codex')+'状态：'+labels[status]+(devices.length?'；工作设备：'+devices.join('、'):'')+(last?'；最后更新 '+new Date(last).toLocaleString():'；等待首次连接');
   const dot=button.querySelector('.agent-status-dot');dot.className='agent-status-dot live-'+status;
   dot.onclick=event=>{event.stopPropagation();showToast(description);};
   button.title=description;button.setAttribute('aria-label',button.textContent+'：'+description);

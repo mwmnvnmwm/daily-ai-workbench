@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>日常与 AI Agent 协同工作台</title><link rel="stylesheet" href="./shell.css?v=24f3cf673d6c"></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>日常与 AI Agent 协同工作台</title><link rel="stylesheet" href="./shell.css?v=0009034a67c8"></head>
 <body>
 <main id="auth-view" class="auth-layout">
  <section class="intro"><span class="eyebrow">DAILY WORKBENCH</span><h1>让日常记录，<br>在每个设备接续。</h1><p>任务、灵感与 AI Agent 协作记录，<br>登录同一账号，继续上次的工作。</p><div class="features"><span>账号私有空间</span><span>自动云同步</span><span>保留原有导出</span></div></section>
@@ -9,10 +9,10 @@
  <p id="auth-message" role="status" aria-live="polite"></p><p class="footnote">首次使用？登录后可导入旧工作台的 JSON 备份。</p></section>
 </main>
 <section id="workspace" hidden>
- <details id="account-panel" open><summary>账号与同步 <span>展开 / 收起</span></summary><div class="account-bar"><div><strong>◈ 我的工作台</strong><span id="account-email"></span></div><div class="bar-actions"><span id="sync-status" role="status" aria-live="polite">正在连接…</span><button id="refresh">同步</button><button id="import">导入旧数据</button><button id="backup">备份</button><button id="password-change">修改密码</button><button id="logout">退出</button></div></div></details>
+ <details id="account-panel" open><summary>账号与同步 <span>展开 / 收起</span></summary><div class="account-bar"><div><strong>◈ 我的工作台</strong><span id="account-email"></span></div><div class="bar-actions"><span id="sync-status" role="status" aria-live="polite">正在连接…</span><button id="connect-browser">连接 ChatGPT</button><button id="refresh">同步</button><button id="import">导入旧数据</button><button id="backup">备份</button><button id="password-change">修改密码</button><button id="logout">退出</button></div></div></details>
  <div id="notice" hidden><span id="notice-text"></span><button id="resolve" hidden>处理冲突</button></div>
  <div id="loading">正在读取你的云端记录…</div><iframe id="workbench" title="日常与 AI Agent 工作台" hidden></iframe>
 </section>
 <input id="import-file" type="file" accept=".json,application/json" hidden>
 <dialog id="dialog"><h2 id="dialog-title"></h2><p id="dialog-description"></p><input id="new-password" type="password" autocomplete="new-password" minlength="10" hidden><div class="dialog-actions"><button id="dialog-cancel">取消</button><button id="dialog-confirm" class="primary">确认</button></div></dialog>
-<script type="module" src="./app.js?v=24f3cf673d6c"></script></body></html>
+<dialog id="browser-dialog"><h2>连接 ChatGPT 网页状态</h2><p>每台电脑单独绑定。只检测 Chrome 网页，不包含独立桌面应用。</p><p><a href="./chatgpt-extension.zip" download>下载 Chrome 扩展</a> · 解压后在 chrome://extensions 开启开发者模式，选择「加载已解压的扩展程序」。</p><label>工作台 Agent<select id="browser-agent"></select></label><label>设备名称<input id="browser-device" maxlength="40" placeholder="例如：办公室 Chrome"></label><button id="browser-create">生成本机配网码</button><textarea id="browser-code" readonly aria-label="设备配网码" hidden></textarea><p id="browser-message" role="status"></p><div id="browser-devices"></div><button id="browser-close">关闭</button></dialog><script type="module" src="./app.js?v=0009034a67c8"></script></body></html>
