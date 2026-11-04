@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>日常与 AI Agent 协同工作台 (账号云同步版)</title>
-  <link rel="stylesheet" href="./workbench.css?v=50cae42fba24">
+  <link rel="stylesheet" href="./workbench.css?v=0d5dd11bbb40">
   <style>
     body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
   </style>
@@ -1002,6 +1002,9 @@ function installManagementDialog() {
   launch.textContent = '管理';
   launch.setAttribute('aria-haspopup', 'dialog');
   launch.setAttribute('aria-expanded', String(managementDialogOpen));
+  const titleRow=document.querySelector('.workbench-header h1')?.parentElement;
+  if(titleRow){titleRow.classList.add('mobile-title-row');titleRow.append(launch);}
+  document.querySelector('.filter-toolbar')?.remove();
   const dialog = document.createElement('dialog');
   dialog.id = 'mobile-management-dialog';
   dialog.setAttribute('aria-labelledby', 'mobile-management-heading');
@@ -1057,8 +1060,13 @@ render = function() {
   oldDialog?.remove();
   oldManagementDialog?.remove();
   const sidebarVisible=ui.showLeftSidebar;
-  if(mobileTaskLayout.matches)ui.showLeftSidebar=true;
-  try{originalRender();}finally{ui.showLeftSidebar=sidebarVisible;}
+  const desktopTaskView=ui.taskViewMode;
+  if(mobileTaskLayout.matches){ui.showLeftSidebar=true;ui.taskViewMode='list';}
+  try{originalRender();}finally{ui.showLeftSidebar=sidebarVisible;ui.taskViewMode=desktopTaskView;}
+  if(mobileTaskLayout.matches){
+    const labels=['Agent','日常','导出','垃圾桶'];
+    document.querySelectorAll('.workbench-header nav button').forEach((button,index)=>{button.setAttribute('aria-label',button.textContent.trim());button.textContent=labels[index];});
+  }
   installTaskDialog();
   installManagementDialog();
   const newManagementDialog=document.getElementById('mobile-management-dialog');
