@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>日常与 AI Agent 协同工作台 (账号云同步版)</title>
-  <link rel="stylesheet" href="./workbench.css?v=756c92fe7032">
+  <link rel="stylesheet" href="./workbench.css?v=24f3cf673d6c">
   <style>
     body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
   </style>
@@ -673,7 +673,7 @@
               </div>
               <div class="filter-navigation"><div class="filter-row" data-filter="agents"><span class="filter-label">Agent</span><div class="filter-options">
                 <button onclick="setAgentFilter('all')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedAgentFilter==='all'?'bg-indigo-600 text-white':'bg-slate-100 text-slate-600'}">全部 (${state.tasks.length})</button>
-                ${state.agents.map(a => {const active=state.tasks.some(t=>t.agentId===a.id&&t.status==='active');const status=active?'有进行中的任务':'暂无进行中的任务';return `<button onclick="setAgentFilter('${a.id}')" title="${status}" aria-label="${esc(a.name)}：${status}" class="agent-filter-chip px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedAgentFilter===a.id?'bg-indigo-600 text-white':'bg-slate-100 text-slate-700'}"><span class="agent-status-dot ${active?'is-active':'is-idle'}" aria-hidden="true"></span>${esc(a.name)}</button>`;}).join("")}
+                ${state.agents.map(a => {const active=state.tasks.some(t=>t.agentId===a.id&&t.status==='active');const status=active?'有进行中的任务':'暂无进行中的任务';return `<button onclick="setAgentFilter('${a.id}')" title="${status}" aria-label="${esc(a.name)}：${status}" data-agent-id="${esc(a.id)}" class="agent-filter-chip px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedAgentFilter===a.id?'bg-indigo-600 text-white':'bg-slate-100 text-slate-700'}"><span class="agent-status-dot ${active?'is-active':'is-idle'}" aria-hidden="true"></span>${esc(a.name)}</button>`;}).join("")}
               </div></div>
               <div class="filter-row" data-filter="projects"><span class="filter-label">项目</span><div class="filter-options">
                 <button onclick="setProjFilter('all')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedProjectFilter==='all'?'bg-purple-600 text-white':'bg-slate-100 text-slate-600'}">全部</button>
@@ -681,6 +681,7 @@
               </div></div>
               </div>
             </section>
+
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
               ${ui.showLeftSidebar ? `
                 <div id="agent-project-management" class="lg:col-span-4 space-y-5">
@@ -981,6 +982,26 @@
 // Runs inside the existing workbench, with cloud operations owned by the account shell.
 const HOST_ORIGIN = location.origin;
 let accountReady = false;
+let liveConnections=[],liveSessions=[],presenceFailed=false;
+function updatePresenceDots(){
+ for(const connection of liveConnections){
+  const button=[...document.querySelectorAll('.agent-filter-chip')].find(e=>e.dataset.agentId===connection.agent_id);
+  if(!button)continue;
+  const sessions=liveSessions.filter(s=>s.connection_id===connection.id);
+  const fresh=sessions.filter(s=>Date.now()-Date.parse(s.updated_at)<300000);
+  let status='unknown';
+  if(!presenceFailed&&fresh.length){
+   status=fresh.some(s=>s.status==='working')?'working':fresh.some(s=>s.status==='waiting')?'waiting':sessions.some(s=>s.status!=='offline'&&!fresh.includes(s))?'unknown':fresh.some(s=>s.status==='idle')?'idle':'offline';
+  }
+  const labels={working:'工作中',waiting:'等待授权',idle:'空闲',offline:'已断开',unknown:'未连接或状态待确认'};
+  const last=sessions.length?Math.max(...sessions.map(s=>Date.parse(s.updated_at))):null;
+  const description='Codex 实时状态：'+labels[status]+(last?'；最后事件 '+new Date(last).toLocaleString():'；等待首次连接');
+  const dot=button.querySelector('.agent-status-dot');dot.className='agent-status-dot live-'+status;
+  dot.onclick=event=>{event.stopPropagation();showToast(description);};
+  button.title=description;button.setAttribute('aria-label',button.textContent+'：'+description);
+ }
+}
+setInterval(updatePresenceDots,5000);
 const post = (type, extra = {}) => parent.postMessage({channel: 'daily-account-v1', type, ...extra}, HOST_ORIGIN);
 const originalRender = render;
 const updateHeaderHeight = () => {
@@ -1071,6 +1092,7 @@ render = function() {
   }
   installTaskDialog();
   installManagementDialog();
+  updatePresenceDots();
   const newManagementDialog=document.getElementById('mobile-management-dialog');
   if(newManagementDialog)newManagementDialog.scrollTop=managementScroll;
   document.querySelectorAll('.filter-options').forEach((el,index) => {if(filterScroll[index] !== undefined)el.scrollLeft=filterScroll[index];});
@@ -1112,6 +1134,8 @@ window.setInitialStatus = status => {
 };
 window.addEventListener('message', event => {
   if (event.origin !== HOST_ORIGIN || event.source !== parent || event.data?.channel !== 'daily-account-v1') return;
+  if(event.data.type==='presence'){liveConnections=event.data.connections;liveSessions=event.data.sessions;presenceFailed=false;updatePresenceDots();}
+  if(event.data.type==='presence-error'){presenceFailed=true;updatePresenceDots();}
   if (event.data.type === 'load') {
     state = event.data.data;
     accountReady = true;
