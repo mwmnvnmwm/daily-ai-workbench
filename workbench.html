@@ -671,7 +671,7 @@
                   <button onclick="setTaskView('kanban')" class="px-2.5 py-1 rounded-lg text-xs font-medium ${ui.taskViewMode==='kanban'?'bg-white text-indigo-700 shadow-2xs':'text-slate-600'}">状态看板</button>
                 </div>
               </div>
-              <div class="filter-row" data-filter="agents"><span class="filter-label">Agent</span><div class="filter-options">
+              <div class="filter-navigation"><div class="filter-row" data-filter="agents"><span class="filter-label">Agent</span><div class="filter-options">
                 <button onclick="setAgentFilter('all')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedAgentFilter==='all'?'bg-indigo-600 text-white':'bg-slate-100 text-slate-600'}">全部 (${state.tasks.length})</button>
                 ${state.agents.map(a => `<button onclick="setAgentFilter('${a.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedAgentFilter===a.id?'bg-indigo-600 text-white':'bg-slate-100 text-slate-700'}">${esc(a.name)}</button>`).join("")}
               </div></div>
@@ -679,6 +679,7 @@
                 <button onclick="setProjFilter('all')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedProjectFilter==='all'?'bg-purple-600 text-white':'bg-slate-100 text-slate-600'}">全部</button>
                 ${state.projects.map(p => `<button onclick="setProjFilter('${p.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium ${ui.selectedProjectFilter===p.id?'bg-purple-600 text-white':'bg-purple-50 text-purple-700'}">${esc(p.name)}</button>`).join("")}
               </div></div>
+              </div>
             </section>
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
               ${ui.showLeftSidebar ? `
@@ -987,12 +988,62 @@ const updateHeaderHeight = () => {
   if (header) document.documentElement.style.setProperty('--workbench-header-height', header.getBoundingClientRect().height + 'px');
 };
 const headerObserver = new ResizeObserver(updateHeaderHeight);
+const mobileTaskLayout = matchMedia('(max-width: 640px)');
+let taskDialogOpen = false;
+const taskFieldIds = ['task-title', 'task-note', 'task-agent', 'task-proj'];
+let clearTaskDraft = false;
+function installTaskDialog() {
+  if (!mobileTaskLayout.matches) return;
+  const input = document.getElementById('task-title');
+  if (!input) return;
+  const form = input.parentElement.parentElement;
+  const launch = document.createElement('button');
+  launch.id = 'mobile-add-task'; launch.className = 'mobile-add-task'; launch.textContent = '新增 ＋';
+  launch.setAttribute('aria-haspopup', 'dialog');
+  form.before(launch);
+  const dialog = document.createElement('dialog'); dialog.id = 'mobile-task-dialog';
+  dialog.setAttribute('aria-labelledby', 'mobile-task-heading');
+  dialog.innerHTML = '<div class="mobile-task-dialog-header"><h2 id="mobile-task-heading">新增任务</h2><button type="button" aria-label="关闭新增任务">关闭 ×</button></div><p class="mobile-task-error" role="alert" style="padding:0 16px;color:#be123c;font-size:12px"></p>';
+  dialog.append(form); document.body.append(dialog);
+  const close = () => {taskDialogOpen = false; dialog.close(); post('editing', {active:false}); launch.focus();};
+  dialog.querySelector('button').onclick = close;
+  dialog.addEventListener('cancel', event => {event.preventDefault(); close();});
+  launch.onclick = () => {taskDialogOpen = true; dialog.showModal(); post('editing', {active:true});};
+  if (taskDialogOpen) {dialog.showModal(); post('editing', {active:true});}
+}
 render = function() {
+  const filterScroll = mobileTaskLayout.matches ? [...document.querySelectorAll('.filter-options')].map(el => el.scrollLeft) : [];
+  const oldDialog = document.getElementById('mobile-task-dialog');
+  const draft = !clearTaskDraft && (mobileTaskLayout.matches || oldDialog) ? Object.fromEntries(taskFieldIds.map(id => [id,document.getElementById(id)?.value])) : null;
+  oldDialog?.remove();
   originalRender();
+  installTaskDialog();
+  document.querySelectorAll('.filter-options').forEach((el,index) => {if(filterScroll[index] !== undefined)el.scrollLeft=filterScroll[index];});
+  if (draft) for (const [id,value] of Object.entries(draft)) {const el=document.getElementById(id);if(el && value!==undefined)el.value=value;}
   headerObserver.disconnect();
   const header = document.querySelector('.workbench-header');
   if (header) headerObserver.observe(header);
   updateHeaderHeight();
+};
+mobileTaskLayout.addEventListener('change', () => {if(accountReady)render();});
+const originalAddTask = window.addTask;
+window.addTask = () => {
+  const dialog = document.getElementById('mobile-task-dialog');
+  if (dialog?.open) {
+    const title = document.getElementById('task-title'), agent = document.getElementById('task-agent');
+    if (!title.value.trim() || !agent.value) {
+      dialog.querySelector('.mobile-task-error').textContent = !title.value.trim() ? '请填写任务名称。' : '请先关闭弹窗，在 Agent/项目管理中添加一个 Agent。';
+      if (!title.value.trim()) title.focus();
+      return;
+    }
+  }
+  const count = state.tasks.length;
+  clearTaskDraft = true;
+  const wasOpen = taskDialogOpen;
+  taskDialogOpen = false;
+  try {originalAddTask();} finally {clearTaskDraft = false;}
+  if (state.tasks.length === count) taskDialogOpen = wasOpen;
+  else {post('editing', {active:false});document.getElementById('mobile-add-task')?.focus();}
 };
 window.setInitialStatus = status => {
   const fields = ['task-title', 'task-note', 'task-agent', 'task-proj'];
@@ -1021,7 +1072,7 @@ save = function(message) {
 window.toggleCloudModal = () => post('sync');
 window.clearDemoData = () => showToast('请通过任务、记录和垃圾桶管理你的数据');
 window.addEventListener('focusin', event => { if (event.target.matches('input,textarea,select')) post('editing', {active: true}); });
-window.addEventListener('focusout', () => post('editing', {active: false}));
+window.addEventListener('focusout', () => post('editing', {active: taskDialogOpen}));
 post('ready');
 
   </script>
