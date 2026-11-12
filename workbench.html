@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>日常与 AI Agent 协同工作台 (账号云同步版)</title>
-  <link rel="stylesheet" href="./workbench.css?v=78078c31996b">
+  <link rel="stylesheet" href="./workbench.css?v=3b5b2a4bb716">
   <style>
     body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
   </style>
@@ -1101,6 +1101,8 @@ render = function() {
   installTaskDialog();
   installManagementDialog();
   updatePresenceDots();
+  document.querySelector('main')?.classList.remove('discussion-main');
+  renderDiscussion();
   const newManagementDialog=document.getElementById('mobile-management-dialog');
   if(newManagementDialog)newManagementDialog.scrollTop=managementScroll;
   document.querySelectorAll('.filter-options').forEach((el,index) => {if(filterScroll[index] !== undefined)el.scrollLeft=filterScroll[index];});
@@ -1161,6 +1163,124 @@ window.clearDemoData = () => showToast('请通过任务、记录和垃圾桶管�
 window.addEventListener('focusin', event => { if (event.target.matches('input,textarea,select')) post('editing', {active: true}); });
 window.addEventListener('focusout', () => post('editing', {active: mobileTaskLayout.matches && (taskDialogOpen || managementDialogOpen)}));
 post('ready');
+
+// Embedded in the workbench frame; account authentication stays in the parent.
+const discussion={snapshot:{rooms:[],connections:[],members:[],messages:[],deliveries:[]},room:null,newRoom:false,selected:new Map(),recipients:new Set(),drafts:new Map(),title:'',firstMessage:'',error:'',busy:false,revision:0,pending:new Map(),createId:null,messageIds:new Map()};
+const discussionLabels={queued:'等待设备接收',claimed:'正在打开聊天',sent:'已发送 · 等待回答',streaming:'回答中',completed:'已完成',failed:'未完成'};
+const discussionSafeUrl=(url,provider)=>{
+ try{const u=new URL(url);return u.protocol==='https:'&&((provider==='chatgpt-browser'&&u.hostname==='chatgpt.com'&&/^\/c\/[\w-]+$/.test(u.pathname))||(provider==='gemini-browser'&&u.hostname==='gemini.google.com'&&/^\/app\/[\w-]+$/.test(u.pathname)))?u.href:null;}catch{return null;}
+};
+function discussionRequest(action,payload={}){
+ const requestId=crypto.randomUUID();
+ return new Promise((resolve,reject)=>{
+  const timeout=setTimeout(()=>{discussion.pending.delete(requestId);reject(Error('连接超时，请重试；消息不会重复入队。'));},25000);
+  discussion.pending.set(requestId,{resolve,reject,timeout});post('discussion-request',{requestId,action,payload});
+ });
+}
+function discussionTime(time){return new Date(time).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});}
+function discussionMemberChoices(){
+ return state.agents.map(a=>{
+  const devices=discussion.snapshot.connections.filter(c=>c.agent_id===a.id&&c.discussion_enabled&&['chatgpt-browser','gemini-browser'].includes(c.provider));
+  const chosen=discussion.selected.get(a.id);const selected=devices.some(d=>d.id===chosen)?chosen:devices[0]?.id;
+  return `<div class="discussion-agent-choice"><label><input type="checkbox" data-discussion-agent="${esc(a.id)}" ${chosen&&selected?'checked':''} ${devices.length?'':'disabled'}><span><strong>${esc(a.name)}</strong><small>${devices.length?'在所选设备的原应用中开启聊天':'待接入 · 请先连接并启用网页扩展'}</small></span></label>${devices.length?`<select aria-label="${esc(a.name)} 的参与设备" data-discussion-device="${esc(a.id)}">${devices.map(d=>`<option value="${esc(d.id)}" ${d.id===selected?'selected':''}>${esc(d.device_name)}${d.discussion_seen_at&&Date.now()-Date.parse(d.discussion_seen_at)<90000?' · 已连接':' · 等待连接'}</option>`).join('')}</select>`:''}</div>`;
+ }).join('')||'<p class="discussion-muted">先在 Agent 栏目添加你要使用的 Agent。</p>';
+}
+function discussionRoomBody(){
+ const s=discussion.snapshot;
+ if(discussion.newRoom)return `<section class="discussion-create"><div class="discussion-eyebrow">NEW DISCUSSION</div><h2>开启一个新话题</h2><p class="discussion-muted">同一个问题，听听不同 Agent 的想法。</p><label class="discussion-field">讨论主题<input id="discussion-title" maxlength="120" placeholder="例如：下一版产品应该优先做什么？" value="${esc(discussion.title)}"></label><fieldset><legend>选择参与的 Agent <span>最多 8 位，每位选择一台设备</span></legend><div class="discussion-agent-choices">${discussionMemberChoices()}</div></fieldset><button data-discussion-action="connect" class="discussion-link">连接 / 启用网页 Agent</button><label class="discussion-field">第一条消息<textarea id="discussion-first-message" maxlength="20000" rows="5" placeholder="写下背景、问题，以及你希望大家重点讨论的内容…">${esc(discussion.firstMessage)}</textarea></label><p class="discussion-muted">仅同步本讨论室发送的消息和回答。请在对应浏览器配置中登录正确的 Agent 账号，并保持浏览器运行。</p><div class="discussion-form-actions"><button data-discussion-action="create" class="discussion-primary" ${discussion.busy?'disabled':''}>${discussion.busy?'正在创建…':'发起讨论'}</button></div></section>`;
+ if(!discussion.room)return `<section class="discussion-empty"><div class="discussion-empty-mark">◎</div><h2>让不同的想法，在这里相遇</h2><p>发起一个主题，邀请多个 Agent 分别回答。<br>每位 Agent 都保留自己的聊天上下文。</p><button data-discussion-action="new" class="discussion-primary">＋ 发起讨论</button><small>首批支持 ChatGPT、Gemini 网页版</small></section>`;
+ const room=s.rooms.find(r=>r.id===discussion.room);
+ if(s.room!==discussion.room)return '<div class="discussion-empty" role="status">正在读取讨论…</div>';
+ return `<div class="discussion-room-heading"><div><div class="discussion-eyebrow">DISCUSSION ROOM</div><h2>${esc(room?.title||'讨论室')}</h2><p class="discussion-muted">${s.members.length} 位 Agent · 各自独立回答 · 可选择对象继续追问</p></div><button data-discussion-action="refresh" class="discussion-secondary">刷新</button></div><div class="discussion-rounds">${s.messages.map(m=>{
+  const deliveries=s.deliveries.filter(d=>d.message_id===m.id);
+  return `<section class="discussion-round"><div class="discussion-prompt"><div class="discussion-prompt-meta"><strong>你 · 第 ${m.turn} 轮</strong><time>${discussionTime(m.created_at)}</time></div><p>${esc(m.content)}</p></div><div class="discussion-answers">${deliveries.map(d=>{
+   const member=s.members.find(a=>a.agent_id===d.agent_id);const url=discussionSafeUrl(member?.chat_url,member?.provider);
+   const active=!['failed','completed'].includes(d.status);
+   const stale=active&&d.status!=='queued'&&Date.now()-Date.parse(d.updated_at)>90000;
+   return `<article class="discussion-answer" data-delivery="${esc(d.id)}"><header><strong>${esc(member?.agent_name||'Agent')}</strong><span class="discussion-status is-${esc(d.status)}">${stale?'连接中断 · 等待恢复':discussionLabels[d.status]}</span></header><div class="discussion-answer-text">${d.answer?esc(d.answer):`<span class="discussion-muted">${d.status==='queued'?'消息已排队，设备连接后会接收。':active?'正在等待 Agent 的回答…':'暂无回答'}</span>`}</div>${d.error?`<p class="discussion-delivery-error">${esc(d.error)}</p>`:''}<footer>${url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">打开原聊天 ↗</a>`:'<span></span>'}${active?`<button data-discussion-cancel="${esc(d.id)}">${d.status==='queued'?'取消发送':'停止等待'}</button>`:''}</footer></article>`;
+  }).join('')}</div></section>`;
+ }).join('')||'<div class="discussion-muted">讨论室已创建，发送消息开始讨论。</div>'}</div><section class="discussion-composer"><fieldset><legend>这轮发给谁</legend><div class="discussion-recipients">${s.members.map(m=>{
+  const pending=s.deliveries.some(d=>d.agent_id===m.agent_id&&!['completed','failed'].includes(d.status));
+  return `<label><input type="checkbox" data-discussion-recipient="${esc(m.agent_id)}" ${discussion.recipients.has(m.agent_id)?'checked':''} ${pending?'disabled':''}>${esc(m.agent_name)}${pending?' · 处理中':''}</label>`;
+ }).join('')}</div></fieldset><label class="discussion-field"><span class="sr-only">继续讨论</span><textarea id="discussion-message" maxlength="20000" rows="3" placeholder="继续追问，消息将发到各 Agent 原来的主题聊天中…">${esc(discussion.drafts.get(discussion.room)||'')}</textarea></label><div class="discussion-form-actions"><span class="discussion-muted">回答会自动更新；设备离线时消息保留在队列。</span><button data-discussion-action="send" class="discussion-primary" ${discussion.busy?'disabled':''}>${discussion.busy?'正在发送…':'发送给所选 Agent'}</button></div></section>`;
+}
+function renderDiscussion(){
+ const nav=document.querySelector('.workbench-header nav');
+ if(!nav)return;
+ if(!document.getElementById('discussion-tab')){
+  const button=document.createElement('button');button.id='discussion-tab';button.className='px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition';button.textContent='讨论室';button.onclick=()=>switchTab('discussions');nav.insertBefore(button,nav.children[1]);
+ }
+ const active=ui.activeTab==='discussions';document.getElementById('discussion-tab').classList.toggle('discussion-tab-active',active);
+ if(!active)return;
+ document.getElementById('mobile-add-task')?.remove();document.getElementById('mobile-task-dialog')?.remove();document.getElementById('mobile-management-dialog')?.remove();
+ const main=document.querySelector('main');main.classList.add('discussion-main');
+ main.innerHTML=`<section id="discussion-workspace"><aside class="discussion-sidebar"><div class="discussion-sidebar-title"><h2>讨论室</h2><button data-discussion-action="new" aria-label="发起讨论">＋</button></div><p class="discussion-muted">一个主题，多种视角</p><nav aria-label="历史讨论">${discussion.snapshot.rooms.map(r=>`<button class="discussion-room-item ${discussion.room===r.id&&!discussion.newRoom?'selected':''}" data-discussion-room="${esc(r.id)}"><strong>${esc(r.title)}</strong><time>${discussionTime(r.updated_at)}</time></button>`).join('')||'<p class="discussion-muted">还没有讨论记录</p>'}</nav></aside><div class="discussion-content"><p id="discussion-feedback" role="status" ${discussion.error?'':'hidden'}>${esc(discussion.error)}</p><div id="discussion-body">${discussionRoomBody()}</div></div></section>`;
+ bindDiscussion();
+}
+function updateDiscussion(){
+ if(ui.activeTab!=='discussions')return;
+ // Preserve the composer, selection and viewport when streaming updates arrive.
+ const focused=document.activeElement;const id=focused?.id;const start=focused?.selectionStart,end=focused?.selectionEnd;
+ const y=window.scrollY;const sidebar=document.querySelector('.discussion-sidebar nav')?.scrollTop;
+ renderDiscussion();
+ if(sidebar)document.querySelector('.discussion-sidebar nav').scrollTop=sidebar;
+ if(id){const next=document.getElementById(id);next?.focus({preventScroll:true});if(typeof start==='number')next?.setSelectionRange?.(start,end);}
+ window.scrollTo(0,y);
+}
+async function discussionAction(action){
+ if(action==='new'){discussion.newRoom=true;discussion.room=null;discussion.error='';updateDiscussion();return;}
+ if(action==='refresh')return discussionRequest('view',{active:true,room:discussion.room});
+ if(action==='connect')return discussionRequest('connect');
+ if(discussion.busy)return;
+ discussion.error='';
+ try{
+  if(action==='create'){
+   if(!discussion.title.trim()||!discussion.firstMessage.trim()||!discussion.selected.size)throw Error('请填写主题、第一条消息，并选择参与的 Agent。');
+   if(discussion.selected.size>8)throw Error('每次最多选择 8 位 Agent。');
+   discussion.busy=true;updateDiscussion();
+   const id=discussion.createId||=crypto.randomUUID();
+   await discussionRequest('create',{id,title:discussion.title,connections:[...discussion.selected.values()]});
+   const messageId=discussion.messageIds.get(id)||crypto.randomUUID();discussion.messageIds.set(id,messageId);
+   // Switch to the persisted room before sending: a failed first send remains recoverable.
+   discussion.room=id;discussion.newRoom=false;discussion.drafts.set(id,discussion.firstMessage);discussion.recipients=new Set(discussion.selected.keys());
+   await discussionRequest('send',{room:id,id:messageId,content:discussion.firstMessage,agents:[...discussion.recipients]});
+   discussion.drafts.delete(id);discussion.messageIds.delete(id);discussion.createId=null;discussion.title='';discussion.firstMessage='';discussion.selected.clear();
+  }else if(action==='send'){
+   const content=(discussion.drafts.get(discussion.room)||'').trim();const s=discussion.snapshot;
+   const agents=[...discussion.recipients].filter(id=>!s.deliveries.some(d=>d.agent_id===id&&!['failed','completed'].includes(d.status)));
+   if(!content||!agents.length)throw Error('请填写消息，并选择至少一位空闲的 Agent。');
+   discussion.busy=true;updateDiscussion();
+   const id=discussion.messageIds.get(discussion.room)||crypto.randomUUID();discussion.messageIds.set(discussion.room,id);
+   await discussionRequest('send',{room:discussion.room,id,content,agents});
+   discussion.drafts.delete(discussion.room);discussion.messageIds.delete(discussion.room);
+  }
+ }catch(error){discussion.error=error.message;}finally{discussion.busy=false;updateDiscussion();}
+}
+function bindDiscussion(){
+ const workspace=document.getElementById('discussion-workspace');
+ workspace.querySelectorAll('[data-discussion-action]').forEach(b=>b.onclick=()=>discussionAction(b.dataset.discussionAction).catch(e=>{discussion.error=e.message;updateDiscussion();}));
+ workspace.querySelectorAll('[data-discussion-room]').forEach(b=>b.onclick=()=>{discussion.room=b.dataset.discussionRoom;discussion.newRoom=false;discussion.error='';discussion.recipients=new Set();updateDiscussion();discussionRequest('view',{active:true,room:discussion.room}).catch(e=>{discussion.error=e.message;updateDiscussion();});});
+ workspace.querySelectorAll('[data-discussion-agent]').forEach(e=>e.onchange=()=>{const id=e.dataset.discussionAgent;const device=workspace.querySelector(`[data-discussion-device="${id}"]`);if(e.checked)discussion.selected.set(id,device.value);else discussion.selected.delete(id);discussion.createId=null;});
+ workspace.querySelectorAll('[data-discussion-device]').forEach(e=>e.onchange=()=>{if(discussion.selected.has(e.dataset.discussionDevice))discussion.selected.set(e.dataset.discussionDevice,e.value);discussion.createId=null;});
+ workspace.querySelectorAll('[data-discussion-recipient]').forEach(e=>e.onchange=()=>{if(e.checked)discussion.recipients.add(e.dataset.discussionRecipient);else discussion.recipients.delete(e.dataset.discussionRecipient);discussion.messageIds.delete(discussion.room);});
+ workspace.querySelectorAll('[data-discussion-cancel]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await discussionRequest('cancel',{id:b.dataset.discussionCancel});}catch(error){discussion.error=error.message;updateDiscussion();}});
+ const title=document.getElementById('discussion-title');if(title)title.oninput=()=>{discussion.title=title.value;discussion.createId=null;};
+ const first=document.getElementById('discussion-first-message');if(first)first.oninput=()=>{discussion.firstMessage=first.value;};
+ const message=document.getElementById('discussion-message');if(message)message.oninput=()=>{discussion.drafts.set(discussion.room,message.value);discussion.messageIds.delete(discussion.room);};
+}
+const discussionSwitchTab=window.switchTab;
+window.switchTab=tab=>{discussionSwitchTab(tab);discussionRequest('view',{active:tab==='discussions',room:discussion.room}).catch(error=>{if(tab==='discussions'){discussion.error=error.message;updateDiscussion();}});};
+window.addEventListener('message',event=>{
+ if(event.origin!==HOST_ORIGIN||event.source!==parent||event.data?.channel!=='daily-account-v1')return;
+ const m=event.data;
+ if(m.type==='discussion-result'){const p=discussion.pending.get(m.requestId);if(p){clearTimeout(p.timeout);discussion.pending.delete(m.requestId);if(m.ok)p.resolve();else p.reject(Error(m.message));}}
+ if(m.type==='discussion-state'&&m.revision>discussion.revision){
+  discussion.revision=m.revision;const previous=discussion.snapshot;discussion.snapshot=m.snapshot;discussion.error='';
+  if(previous.room!==m.snapshot.room)discussion.recipients=new Set(m.snapshot.members.map(x=>x.agent_id));
+  updateDiscussion();
+ }
+ if(m.type==='discussion-error'){discussion.error=m.message;updateDiscussion();}
+});
 
   </script>
 </body>
